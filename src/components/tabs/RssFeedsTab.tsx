@@ -3,12 +3,19 @@
 import { useState } from 'react';
 import { Plus, RefreshCw, Trash2, CheckCircle2, AlertCircle } from 'lucide-react';
 
+interface FeedItem {
+  title: string;
+  link: string;
+  pubDate: string;
+}
+
 interface Feed {
   id: string;
   name: string;
   url: string;
   active: boolean;
   itemsToday: number;
+  items?: FeedItem[];
 }
 
 const INITIAL_FEEDS: Feed[] = [
@@ -17,6 +24,7 @@ const INITIAL_FEEDS: Feed[] = [
   { id: '3', name: 'Vaping',         url: 'https://alerts.google.com/alerts/feeds/...vaping',         active: true,  itemsToday: 29 },
   { id: '4', name: 'Tobacco Policy', url: 'https://alerts.google.com/alerts/feeds/...tobaccopolicy', active: true,  itemsToday: 24 },
   { id: '5', name: 'Youth Health',   url: 'https://alerts.google.com/alerts/feeds/...youthhealth',   active: false, itemsToday: 0  },
+  { id: '6', name: 'General news (NOS)', url: 'https://feeds.nos.nl/nosnieuwsalgemeen',                active: true,  itemsToday: 0  },
 ];
 
 export default function RssFeedsTab() {
@@ -50,7 +58,20 @@ export default function RssFeedsTab() {
 
   async function handleRefresh() {
     setRefreshing(true);
-    await new Promise(r => setTimeout(r, 1200));
+    const updated = await Promise.all(
+      feeds.map(async (feed) => {
+        if (!feed.active) return feed;
+        try {
+          const res = await fetch(`/api/rss?url=${encodeURIComponent(feed.url)}`);
+          if (!res.ok) return feed;
+          const items: FeedItem[] = await res.json();
+          return { ...feed, items, itemsToday: items.length };
+        } catch {
+          return feed;
+        }
+      }),
+    );
+    setFeeds(updated);
     setRefreshing(false);
   }
 
@@ -127,7 +148,8 @@ export default function RssFeedsTab() {
 
         <div className="divide-y divide-gray-100">
           {feeds.map(feed => (
-            <div key={feed.id} className="py-3 flex items-center justify-between gap-3">
+            <div key={feed.id}>
+            <div className="py-3 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <button
                   onClick={() => toggleFeed(feed.id)}
@@ -158,6 +180,26 @@ export default function RssFeedsTab() {
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
+            </div>
+            {feed.active && feed.items && feed.items.length > 0 && (
+              <ul className="ml-8 mt-1 mb-2 space-y-1">
+                {feed.items.slice(0, 5).map((item) => (
+                  <li key={item.link || item.title} className="text-xs text-gray-600">
+                    <a
+                      href={item.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline hover:text-brand-700"
+                    >
+                      {item.title}
+                    </a>
+                    {item.pubDate && (
+                      <span className="ml-2 text-gray-400">{item.pubDate}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
             </div>
           ))}
         </div>
